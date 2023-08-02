@@ -412,7 +412,7 @@ public class DynmapTownyPlugin extends JavaPlugin {
 	        }
 	
 	       	v = v.replace("%bank%", TownyEconomyHandler.getFormattedBalance(town.getAccount().getCachedBalance()));
-            v = v.replace("%upkeep%", TownyEconomyHandler.getFormattedBalance(TownySettings.getTownUpkeepCost(town)));
+            v = v.replace("%upkeep%", TownyEconomyHandler.getFormattedBalance(TownySettings.getTownUpkeepCost(town) + TownySettings.getTownPenaltyUpkeepCost(town)));
         }
         String nation = town.hasNation() ? town.getNationOrNull().getName() : "";
 
