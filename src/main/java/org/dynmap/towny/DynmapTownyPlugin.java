@@ -16,7 +16,11 @@ import com.palmergames.bukkit.config.ConfigNodes;
 import com.palmergames.bukkit.towny.TownyEconomyHandler;
 import com.palmergames.bukkit.towny.TownyFormatter;
 import com.palmergames.bukkit.towny.TownySettings;
+import com.palmergames.bukkit.towny.scheduling.TaskScheduler;
+import com.palmergames.bukkit.towny.scheduling.impl.BukkitTaskScheduler;
+import com.palmergames.bukkit.towny.scheduling.impl.FoliaTaskScheduler;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
@@ -59,7 +63,7 @@ import org.dynmap.towny.events.TownRenderEvent;
 
 public class DynmapTownyPlugin extends JavaPlugin {
 	
-	private static Version requiredTownyVersion = Version.fromString("0.98.6.0");
+	private static final Version requiredTownyVersion = Version.fromString("0.99.0.6");
     private static Logger log;
     private static final String DEF_INFOWINDOW = "<div class=\"infowindow\"><span style=\"font-size:120%;\">%regionname% (%nation%)</span><br /> Mayor <span style=\"font-weight:bold;\">%playerowners%</span><br /> Associates <span style=\"font-weight:bold;\">%playermanagers%</span><br/>Flags<br /><span style=\"font-weight:bold;\">%flags%</span></div>";
     Plugin dynmap;
@@ -92,6 +96,11 @@ public class DynmapTownyPlugin extends JavaPlugin {
     boolean chat_sendlogin;
     boolean chat_sendquit;
     String chatformat;
+    private final TaskScheduler scheduler;
+
+    public DynmapTownyPlugin() {
+        this.scheduler = isFoliaClassPresent() ? new FoliaTaskScheduler(this) : new BukkitTaskScheduler(this);
+    }
     
     @Override
     public void onLoad() {
@@ -110,9 +119,11 @@ public class DynmapTownyPlugin extends JavaPlugin {
         int fillcolor_wilds;
         String homemarker;
         String capitalmarker;
+        String outpostmarker;
         MarkerIcon homeicon;
         MarkerIcon capitalicon;
         MarkerIcon ruinicon;
+        MarkerIcon outposticon;
         int yc;
         boolean boost;
 
@@ -168,6 +179,11 @@ public class DynmapTownyPlugin extends JavaPlugin {
                 }
             }
             ruinicon = markerapi.getMarkerIcon("warning");
+
+			outpostmarker = cfg.getString(path + ".outposticon", "tower");
+			outposticon = markerapi.getMarkerIcon(outpostmarker);
+			if (outposticon == null)
+				outposticon = markerapi.getMarkerIcon("tower");
         }
         
         public int getStrokeColor(AreaStyle cust, AreaStyle nat) {
@@ -818,6 +834,34 @@ public class DynmapTownyPlugin extends JavaPlugin {
 
                     newmark.put(markid, home);
                 }
+
+				if (town.hasOutpostSpawn()) {
+					MarkerIcon outpostIco = defstyle.outposticon;
+					int i = 0;
+					for (Location loc : town.getAllOutpostSpawns()) {
+						i++;
+						TownBlock tblk = TownyAPI.getInstance().getTownBlock(loc);
+						if (tblk == null)
+							continue;
+
+						double xx = townblocksize * tblk.getX() + (townblocksize / 2);
+						double zz = townblocksize * tblk.getZ() + (townblocksize / 2);
+						String outpostName = town.getName() + "_Outpost_" + i;
+						String outpostMarkerID = outpostName;
+						Marker outpostMarker = resmark.remove(outpostMarkerID);
+						if (outpostMarker == null) {
+							outpostMarker = set.createMarker(outpostMarkerID, outpostName, tblk.getWorld().getName(), xx, 64, zz, outpostIco, true);
+							if (outpostMarker == null)
+								continue;
+						} else {
+							outpostMarker.setLocation(tblk.getWorld().getName(), xx, 64, zz);
+							outpostMarker.setLabel(outpostName);
+							outpostMarker.setMarkerIcon(outpostIco);
+						}
+						outpostMarker.setDescription(tblk.getName() != null ? tblk.getName() : outpostName);
+						newmark.put(outpostMarkerID, outpostMarker);
+					}
+				}
             }
         }
     }
@@ -1058,10 +1102,10 @@ public class DynmapTownyPlugin extends JavaPlugin {
 
         /* Set up update job - based on periond */
         int per = Math.max(15, cfg.getInt("update.period", 300));
-        updperiod = (per*20);
+        updperiod = (per*20L);
         stop = false;
 
-        getServer().getScheduler().runTaskTimerAsynchronously(this, new TownyUpdate(), 40, per);
+        scheduler.runAsyncRepeating(new TownyUpdate(), 40, per);
         
         info("version " + this.getDescription().getVersion() + " is activated");
     }
@@ -1075,4 +1119,12 @@ public class DynmapTownyPlugin extends JavaPlugin {
         stop = true;
     }
 
+    private static boolean isFoliaClassPresent() {
+        try {
+            Class.forName("io.papermc.paper.threadedregions.RegionizedServer");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
 }
