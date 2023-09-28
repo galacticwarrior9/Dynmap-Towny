@@ -56,10 +56,8 @@ import com.palmergames.bukkit.towny.utils.TownRuinUtil;
 import com.palmergames.bukkit.util.Version;
 import com.palmergames.util.StringMgmt;
 import com.palmergames.bukkit.TownyChat.Chat;
-import org.dynmap.towny.events.BuildTownFlagsEvent;
-import org.dynmap.towny.events.BuildTownMarkerDescriptionEvent;
-import org.dynmap.towny.events.TownSetMarkerIconEvent;
-import org.dynmap.towny.events.TownRenderEvent;
+import org.dynmap.towny.events.*;
+import org.dynmap.towny.objects.TownStyle;
 
 public class DynmapTownyPlugin extends JavaPlugin {
 	
@@ -485,13 +483,15 @@ public class DynmapTownyPlugin extends JavaPlugin {
         return true;
     }
         
-    private void addStyle(Town town, AreaMarker m, TownBlockType btype) {
+    private TownStyle addStyle(Town town, AreaMarker m, TownBlockType btype) {
         AreaStyle as = cusstyle.get(town.getName());	/* Look up custom style for town, if any */
         AreaStyle ns = nationstyle.get(getNationNameOrNone(town));	/* Look up nation style, if any */
 
         double y = defstyle.getY(as, ns);
         m.setRangeY(y, y);
         m.setBoostFlag(defstyle.getBoost(as, ns));
+
+        TownStyle style = new TownStyle(0, 0, 0, 0, 0);
 
         //Read dynamic colors from town/nation objects
         if(dynamicTownColorsEnabled || dynamicNationColorsEnabled) {
@@ -508,7 +508,7 @@ public class DynmapTownyPlugin extends JavaPlugin {
                         //If town has a color, use it
                         townFillColorInteger = Integer.parseInt(colorHexCode, 16);
                         townBorderColorInteger = townFillColorInteger;
-                    }                
+                    }
                 } else {
                     //Here we know the server is using nation colors
                     colorHexCode = town.getNationMapColorHexCode();              
@@ -524,7 +524,7 @@ public class DynmapTownyPlugin extends JavaPlugin {
                     colorHexCode = town.getNationMapColorHexCode();              
                     if(colorHexCode != null && !colorHexCode.isEmpty()) {
                         //If nation has a color, use it
-                        townBorderColorInteger = Integer.parseInt(colorHexCode, 16);                
+                        townBorderColorInteger = Integer.parseInt(colorHexCode, 16);
                     }                                
                 } else {
                     //Here we know the server is using town colors
@@ -541,9 +541,9 @@ public class DynmapTownyPlugin extends JavaPlugin {
                     double fillOpacity = m.getFillOpacity();
                     //Allow special fills for some townblock types
                     int townblockcolor = defstyle.getFillColor(btype);
-                    m.setFillStyle(fillOpacity, townblockcolor >= 0 ? townblockcolor : townFillColorInteger);
+                    style.setFill(fillOpacity, townblockcolor >= 0 ? townblockcolor : townFillColorInteger);
                 } else {
-                    m.setFillStyle(defstyle.getFillOpacity(as, ns), defstyle.getFillColor(as, ns, btype));
+                    style.setFill(defstyle.getFillOpacity(as, ns), defstyle.getFillColor(as, ns, btype));
                 }
 
                 //SET BORDER COLOR
@@ -551,18 +551,19 @@ public class DynmapTownyPlugin extends JavaPlugin {
                     //Set stroke style
                     double strokeOpacity = m.getLineOpacity();
                     int strokeWeight = m.getLineWeight();
-                    m.setLineStyle(strokeWeight, strokeOpacity, townBorderColorInteger);
+                    style.setBorder(strokeOpacity, strokeWeight, townBorderColorInteger);
                 } else {
                     if(btype == null) {
-                        m.setLineStyle(defstyle.getStrokeWeight(as, ns), defstyle.getStrokeOpacity(as, ns), defstyle.getStrokeColor(as, ns));
+                        style.setBorder(defstyle.getStrokeOpacity(as, ns), defstyle.getStrokeWeight(as, ns), defstyle.getStrokeColor(as, ns));
                     }
                     else {
-                        m.setLineStyle(1, 0, 0);
+                        style.setBorder(1, 0, 0);
                     }
                 }
 
             } catch (Exception ex) {}
         }
+        return style;
     }
 
 	private MarkerIcon getMarkerIcon(Town town) {
@@ -793,7 +794,13 @@ public class DynmapTownyPlugin extends JavaPlugin {
                 /* Set popup */
                 m.setDescription(desc);
                 /* Set line and fill properties */
-                addStyle(town, m, btype);
+                TownStyle style = addStyle(town, m, btype);
+                TownStyleEvent styleEvent = new TownStyleEvent(town, style);
+                styleEvent.callEvent();
+                style = styleEvent.getStyle();
+
+                m.setLineStyle(style.getBorderWeight(), style.getBorderOpacity(), style.getBorderColor());
+                m.setFillStyle(style.getFillOpacity(), style.getFillColor());
 
                 /* Fire an event allowing other plugins to alter the AreaMarker */
                 TownRenderEvent renderEvent = new TownRenderEvent(town, m); 
