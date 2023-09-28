@@ -488,14 +488,7 @@ public class DynmapTownyPlugin extends JavaPlugin {
     private void addStyle(Town town, AreaMarker m, TownBlockType btype) {
         AreaStyle as = cusstyle.get(town.getName());	/* Look up custom style for town, if any */
         AreaStyle ns = nationstyle.get(getNationNameOrNone(town));	/* Look up nation style, if any */
-        
-        if(btype == null) {
-            m.setLineStyle(defstyle.getStrokeWeight(as, ns), defstyle.getStrokeOpacity(as, ns), defstyle.getStrokeColor(as, ns));
-        }
-        else {
-            m.setLineStyle(1, 0, 0);
-        }
-        m.setFillStyle(defstyle.getFillOpacity(as, ns), defstyle.getFillColor(as, ns, btype));
+
         double y = defstyle.getY(as, ns);
         m.setRangeY(y, y);
         m.setBoostFlag(defstyle.getBoost(as, ns));
@@ -549,6 +542,8 @@ public class DynmapTownyPlugin extends JavaPlugin {
                     //Allow special fills for some townblock types
                     int townblockcolor = defstyle.getFillColor(btype);
                     m.setFillStyle(fillOpacity, townblockcolor >= 0 ? townblockcolor : townFillColorInteger);
+                } else {
+                    m.setFillStyle(defstyle.getFillOpacity(as, ns), defstyle.getFillColor(as, ns, btype));
                 }
 
                 //SET BORDER COLOR
@@ -557,7 +552,14 @@ public class DynmapTownyPlugin extends JavaPlugin {
                     double strokeOpacity = m.getLineOpacity();
                     int strokeWeight = m.getLineWeight();
                     m.setLineStyle(strokeWeight, strokeOpacity, townBorderColorInteger);
-                }   
+                } else {
+                    if(btype == null) {
+                        m.setLineStyle(defstyle.getStrokeWeight(as, ns), defstyle.getStrokeOpacity(as, ns), defstyle.getStrokeColor(as, ns));
+                    }
+                    else {
+                        m.setLineStyle(1, 0, 0);
+                    }
+                }
 
             } catch (Exception ex) {}
         }
@@ -776,7 +778,7 @@ public class DynmapTownyPlugin extends JavaPlugin {
                     z[i] = (double)line[1] * (double)townblocksize;
                 }
                 /* Find existing one */
-                AreaMarker m = resareas.remove(polyid); /* Existing area? */
+                AreaMarker m = resareas.get(polyid); /* Existing area? */
                 if(m == null) {
                     m = set.createAreaMarker(polyid, name, false, curworld.getName(), x, z, false);
                     if(m == null) {
@@ -815,11 +817,11 @@ public class DynmapTownyPlugin extends JavaPlugin {
                 ico = iconEvent.getIcon();
 
                 if(ico != null) {
-                    Marker home = resmark.remove(markid);
+                    Marker home = resmark.get(markid);
                     double xx = townblocksize*blk.getX() + (townblocksize/2);
                     double zz = townblocksize*blk.getZ() + (townblocksize/2);
                     if(home == null) {
-                        home = set.createMarker(markid, name, blk.getWorld().getName(), 
+                        home = set.createMarker(markid, name, blk.getWorld().getName(),
                                 xx, 64, zz, ico, false);
                         if(home == null)
                             return;
@@ -848,7 +850,7 @@ public class DynmapTownyPlugin extends JavaPlugin {
 						double zz = townblocksize * tblk.getZ() + (townblocksize / 2);
 						String outpostName = town.getName() + "_Outpost_" + i;
 						String outpostMarkerID = outpostName;
-						Marker outpostMarker = resmark.remove(outpostMarkerID);
+						Marker outpostMarker = resmark.get(outpostMarkerID);
 						if (outpostMarker == null) {
 							outpostMarker = set.createMarker(outpostMarkerID, outpostName, tblk.getWorld().getName(), xx, 64, zz, outpostIco, true);
 							if (outpostMarker == null)
@@ -887,12 +889,16 @@ public class DynmapTownyPlugin extends JavaPlugin {
                 handleTown(t, newmap, newmark, TownBlockType.WILDS);
             }
         }
-        /* Now, review old map - anything left is gone */
-        for(AreaMarker oldm : resareas.values()) {
-            oldm.deleteMarker();
+        /* Now, review old map - anything not in the new map is gone */
+        for (Map.Entry<String, AreaMarker> entries: resareas.entrySet()) {
+            if (!newmap.containsKey(entries.getKey())) {
+                entries.getValue().deleteMarker();;
+            }
         }
-        for(Marker oldm : resmark.values()) {
-            oldm.deleteMarker();
+        for (Map.Entry<String, Marker> entries: resmark.entrySet()) {
+            if (!newmark.containsKey(entries.getKey())) {
+                entries.getValue().deleteMarker();;
+            }
         }
         /* And replace with new map */
         resareas = newmap;
